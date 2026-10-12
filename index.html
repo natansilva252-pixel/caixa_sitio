@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitor Caixa d'Água - MQTT Web</title>
+    <!-- Biblioteca Paho MQTT para Navegador -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+    <style>
+        body { font-family: sans-serif; background: #f4f6f9; text-align: center; margin: 0; padding: 20px; }
+        .container { max-width: 400px; margin: 0 auto; }
+        .card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        h1 { color: #333; font-size: 22px; }
+        .val-main { font-size: 38px; font-weight: bold; color: #0d6efd; margin: 10px 0; }
+        .btn { width: 100%; border: none; padding: 12px; margin-top: 10px; border-radius: 4px; font-size: 16px; cursor: pointer; color: white; font-weight: bold; }
+        .btn-success { background: #198754; }
+        .btn-danger { background: #dc3545; }
+        #status-conexao { font-size: 12px; color: #666; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="card">
+        <h1>Painel Remoto - Caixa d'Água</h1>
+        <div id="status-conexao">Conectando ao broker MQTT...</div>
+        
+        <div class="val-main" id="nivel-agua">--%</div>
+        <p>Distância: <span id="distancia-cm">--</span> cm</p>
+    </div>
+
+    <div class="card">
+        <h2>Controle Contatora (127V)</h2>
+        <button class="btn btn-success" onclick="enviarComando('LIGAR')">Ligar Contatora</button>
+        <button class="btn btn-danger" onclick="enviarComando('DESLIGAR')">Desligar Contatora</button>
+    </div>
+</div>
+
+<script>
+    // Configuração do WebSocket MQTT (HiveMQ Public Broker)
+    const brokerHost = "broker.hivemq.com";
+    const brokerPort = 8000; // Porta WebSocket padrão da HiveMQ
+    const clientId = "web_client_" + Math.random().toString(16).substring(2, 8);
+
+    const client = new Paho.MQTT.Client(brokerHost, Number(brokerPort), clientId);
+
+    client.onConnectionLost = onConnectionLost;
+    client.onMessageArrived = onMessageArrived;
+
+    // Conecta ao broker
+    client.connect({ onSuccess: onConnect, useSSL: false });
+
+    function onConnect() {
+        document.getElementById("status-conexao").innerText = "Conectado à nuvem!";
+        document.getElementById("status-conexao").style.color = "green";
+        client.subscribe("caixa/nivel"); // Tópico onde o ESP32 envia os dados
+    }
+
+    function onConnectionLost(responseObject) {
+        if (responseObject.errorCode !== 0) {
+            document.getElementById("status-conexao").innerText = "Conexão perdida: " + responseObject.errorMessage;
+            document.getElementById("status-conexao").style.color = "red";
+        }
+    }
+
+    function onMessageArrived(message) {
+        // O ESP32 envia um JSON para o tópico caixa/nivel
+        try {
+            let dados = JSON.parse(message.payloadString);
+            document.getElementById("nivel-agua").innerText = dados.nivel_pct + "%";
+            document.getElementById("distancia-cm").innerText = dados.distancia_cm;
+        } catch (e) {
+            console.error("Erro ao ler JSON", e);
+        }
+    }
+
+    function enviarComando(acao) {
+        let message = new Paho.MQTT.Message(acao);
+        message.destinationName = "caixa/comando"; // Tópico onde o ESP32 escuta comandos
+        client.send(message);
+        console.log("Comando enviado: " + acao);
+    }
+</script>
+
+</body>
+</html>

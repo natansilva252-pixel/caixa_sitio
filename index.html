@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Monitor Caixa d'Água - MQTT Web</title>
-    <!-- Biblioteca Paho MQTT para Navegador -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
     <style>
         body { font-family: sans-serif; background: #f4f6f9; text-align: center; margin: 0; padding: 20px; }
@@ -37,9 +36,9 @@
 </div>
 
 <script>
-    // Configuração do WebSocket MQTT (HiveMQ Public Broker)
+    // Configuração com WebSocket Seguro (WSS) na porta 8884 da HiveMQ
     const brokerHost = "broker.hivemq.com";
-    const brokerPort = 8000; // Porta WebSocket padrão da HiveMQ
+    const brokerPort = 8884; 
     const clientId = "web_client_" + Math.random().toString(16).substring(2, 8);
 
     const client = new Paho.MQTT.Client(brokerHost, Number(brokerPort), clientId);
@@ -47,13 +46,22 @@
     client.onConnectionLost = onConnectionLost;
     client.onMessageArrived = onMessageArrived;
 
-    // Conecta ao broker
-    client.connect({ onSuccess: onConnect, useSSL: false });
+    // Obriga o uso de SSL para aceitar WSS
+    client.connect({ 
+        onSuccess: onConnect, 
+        onFailure: onFailure,
+        useSSL: true 
+    });
 
     function onConnect() {
-        document.getElementById("status-conexao").innerText = "Conectado à nuvem!";
+        document.getElementById("status-conexao").innerText = "Conectado à nuvem com sucesso!";
         document.getElementById("status-conexao").style.color = "green";
-        client.subscribe("caixa/nivel"); // Tópico onde o ESP32 envia os dados
+        client.subscribe("caixa/nivel");
+    }
+
+    function onFailure(error) {
+        document.getElementById("status-conexao").innerText = "Falha na conexão: " + error.errorMessage;
+        document.getElementById("status-conexao").style.color = "red";
     }
 
     function onConnectionLost(responseObject) {
@@ -64,7 +72,6 @@
     }
 
     function onMessageArrived(message) {
-        // O ESP32 envia um JSON para o tópico caixa/nivel
         try {
             let dados = JSON.parse(message.payloadString);
             document.getElementById("nivel-agua").innerText = dados.nivel_pct + "%";
@@ -76,9 +83,8 @@
 
     function enviarComando(acao) {
         let message = new Paho.MQTT.Message(acao);
-        message.destinationName = "caixa/comando"; // Tópico onde o ESP32 escuta comandos
+        message.destinationName = "caixa/comando";
         client.send(message);
-        console.log("Comando enviado: " + acao);
     }
 </script>
 

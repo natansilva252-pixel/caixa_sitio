@@ -14,7 +14,9 @@
         .btn { width: 100%; border: none; padding: 12px; margin-top: 10px; border-radius: 4px; font-size: 16px; cursor: pointer; color: white; font-weight: bold; }
         .btn-success { background: #198754; }
         .btn-danger { background: #dc3545; }
-        #status-conexao { font-size: 12px; color: #666; margin-bottom: 10px; }
+        .btn-primary { background: #0d6efd; }
+        #status-conexao { font-size: 12px; color: #666; margin-bottom: 5px; }
+        #tempo-ultima-msg { font-size: 11px; color: #888; margin-bottom: 10px; }
     </style>
 </head>
 <body>
@@ -23,9 +25,12 @@
     <div class="card">
         <h1>Painel Remoto - Caixa d'Água</h1>
         <div id="status-conexao">Conectando ao broker MQTT...</div>
+        <div id="tempo-ultima-msg">Aguardando dados...</div>
         
         <div class="val-main" id="nivel-agua">--%</div>
         <p>Distância: <span id="distancia-cm">--</span> cm</p>
+
+        <button class="btn btn-primary" onclick="forcarLeitura()">Forçar Leitura Agora</button>
     </div>
 
     <div class="card">
@@ -36,17 +41,17 @@
 </div>
 
 <script>
-    // Configuração com WebSocket Seguro (WSS) na porta 8884 da HiveMQ
     const brokerHost = "broker.hivemq.com";
     const brokerPort = 8884; 
     const clientId = "web_client_" + Math.random().toString(16).substring(2, 8);
 
     const client = new Paho.MQTT.Client(brokerHost, Number(brokerPort), clientId);
 
+    let timestampUltimaMsg = null;
+
     client.onConnectionLost = onConnectionLost;
     client.onMessageArrived = onMessageArrived;
 
-    // Obriga o uso de SSL para aceitar WSS
     client.connect({ 
         onSuccess: onConnect, 
         onFailure: onFailure,
@@ -76,6 +81,8 @@
             let dados = JSON.parse(message.payloadString);
             document.getElementById("nivel-agua").innerText = dados.nivel_pct + "%";
             document.getElementById("distancia-cm").innerText = dados.distancia_cm;
+            
+            timestampUltimaMsg = new Date();
         } catch (e) {
             console.error("Erro ao ler JSON", e);
         }
@@ -86,6 +93,25 @@
         message.destinationName = "caixa/comando";
         client.send(message);
     }
+
+    function forcarLeitura() {
+        enviarComando('LER');
+    }
+
+    // Atualiza o contador de tempo da última mensagem a cada 1 segundo
+    setInterval(function() {
+        if (!timestampUltimaMsg) return;
+        let segundos = Math.floor((new Date() - timestampUltimaMsg) / 1000);
+        
+        let textoTempo = "";
+        if (segundos < 60) {
+            textoTempo = `Última leitura há ${segundos} segundo(s)`;
+        } else {
+            let minutos = Math.floor(segundos / 60);
+            textoTempo = `Última leitura há ${minutos} minuto(s)`;
+        }
+        document.getElementById("tempo-ultima-msg").innerText = textoTempo;
+    }, 1000);
 </script>
 
 </body>
